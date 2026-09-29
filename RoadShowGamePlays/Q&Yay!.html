@@ -1,0 +1,926 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Q&Yay! - Interactive Matching Game</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Canvas Confetti -->
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <!-- Professional Typography: Plus Jakarta Sans & Outfit -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            purple: '#6D28D9',
+                            indigo: '#4C1D95',
+                            pink: '#F43F5E',
+                            amber: '#F59E0B',
+                            teal: '#0D9488',
+                            emerald: '#10B981',
+                            slate: '#0F172A'
+                        }
+                    },
+                    fontFamily: {
+                        heading: ['Outfit', 'sans-serif'],
+                        body: ['Plus Jakarta Sans', 'sans-serif']
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background: radial-gradient(circle at 50% 20%, #2e1065 0%, #0f172a 70%, #020617 100%);
+            min-height: 100vh;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: manipulation;
+            overflow-x: hidden;
+            color: #f8fafc;
+        }
+
+        .font-heading {
+            font-family: 'Outfit', sans-serif;
+        }
+
+        /* Responsive glass card styling */
+        .glass-card {
+            background: rgba(255, 255, 255, 0.08);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.16);
+            box-shadow: 0 12px 32px 0 rgba(0, 0, 0, 0.37);
+        }
+
+        .glass-modal {
+            background: rgba(15, 23, 42, 0.96);
+            backdrop-filter: blur(24px);
+            -webkit-backdrop-filter: blur(24px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        /* STREAMING_CHUNK:Styling drag motion and placeholder visual states... -->
+        .question-slot-box {
+            min-height: 180px;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 1.5rem;
+            transition: all 0.25s ease;
+        }
+
+        /* Source placeholder shown when the card has been pulled out */
+        .question-empty-slot {
+            width: 100%;
+            height: 100%;
+            min-height: 180px;
+            border: 2px dashed rgba(245, 158, 11, 0.5);
+            background: rgba(245, 158, 11, 0.05);
+            border-radius: 1.5rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: #fbbf24;
+            animation: pulse-border 1.5s infinite alternate ease-in-out;
+        }
+
+        @keyframes pulse-border {
+            0% { border-color: rgba(245, 158, 11, 0.35); background: rgba(245, 158, 11, 0.03); }
+            100% { border-color: rgba(245, 158, 11, 0.85); background: rgba(245, 158, 11, 0.08); }
+        }
+
+        /* The question card while idle */
+        .draggable-card {
+            cursor: grab;
+            touch-action: none;
+            transition: transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.2s ease, border-color 0.2s ease;
+        }
+
+        .draggable-card:active {
+            cursor: grabbing;
+        }
+
+        /* The active pulled/dragged card that follows cursor/touch */
+        .draggable-card.is-pulled {
+            position: fixed !important;
+            pointer-events: none !important;
+            z-index: 9999 !important;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.85), 0 0 25px rgba(245, 158, 11, 0.6) !important;
+            border-color: #F59E0B !important;
+            transform: translate(-50%, -50%) scale(1.04) rotate(1.5deg) !important;
+            opacity: 0.95;
+            background: linear-gradient(135deg, rgba(76, 29, 149, 0.96), rgba(30, 27, 75, 0.96)) !important;
+        }
+
+        .drop-target-hover {
+            transform: scale(1.03) !important;
+            border-color: #F59E0B !important;
+            background-color: rgba(245, 158, 11, 0.28) !important;
+            box-shadow: 0 0 30px rgba(245, 158, 11, 0.55);
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            20%, 60% { transform: translateX(-10px); }
+            40%, 80% { transform: translateX(10px); }
+        }
+
+        .animate-shake {
+            animation: shake 0.4s ease-in-out;
+        }
+
+        @keyframes correctPulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.03); background-color: rgba(16, 185, 129, 0.45); border-color: #10B981; }
+            100% { transform: scale(1); }
+        }
+
+        .animate-correct {
+            animation: correctPulse 0.45s ease-out;
+        }
+
+        .bg-shape {
+            position: fixed;
+            border-radius: 50%;
+            filter: blur(100px);
+            opacity: 0.28;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        @keyframes pulse-glow {
+            0%, 100% { box-shadow: 0 0 25px rgba(245, 158, 11, 0.6), 0 0 45px rgba(244, 63, 94, 0.35); transform: scale(1); }
+            50% { box-shadow: 0 0 40px rgba(245, 158, 11, 0.95), 0 0 65px rgba(244, 63, 94, 0.6); transform: scale(1.04); }
+        }
+
+        .btn-play-glow {
+            animation: pulse-glow 2.5s infinite ease-in-out;
+        }
+
+        .demo-card-motion {
+            animation: demo-card-flight 4.8s ease-in-out infinite;
+        }
+
+        .demo-target-pulse {
+            animation: demo-target-highlight 4.8s ease-in-out infinite;
+        }
+
+        @keyframes demo-card-flight {
+            0%, 12% { transform: translate(0, 0) rotate(-2deg); }
+            38%, 62% { transform: translate(92px, 58px) rotate(3deg); }
+            76%, 100% { transform: translate(0, 0) rotate(-2deg); }
+        }
+
+        @keyframes demo-target-highlight {
+            0%, 30%, 76%, 100% { border-color: rgba(255, 255, 255, 0.14); background-color: rgba(255, 255, 255, 0.06); }
+            38%, 62% { border-color: rgba(245, 158, 11, 0.9); background-color: rgba(245, 158, 11, 0.22); box-shadow: 0 0 24px rgba(245, 158, 11, 0.35); }
+        }
+    </style>
+</head>
+<body class="text-slate-100 min-h-screen flex flex-col justify-between relative">
+
+    <!-- MAIN APP CONTAINER -->
+    <div id="app" class="relative z-10 flex flex-col min-h-screen w-full max-w-7xl mx-auto px-4 py-4">
+
+        <header class="flex items-center justify-between py-3 mb-3 glass-card px-6 rounded-2xl">
+            <div class="flex items-center gap-3 cursor-pointer" onclick="showScreen('start')">
+                
+                    <svg class="w-9 h-9" viewBox="0 0 512 512" role="img" aria-label="Q and Yay crowned figure" xmlns="http://www.w3.org/2000/svg">
+                        <path fill="#202a35" d="M0 0h512v512H0z" opacity="0"/>
+                        <path fill="#f3b23a" d="M82 88l7 16 17 7-17 7-7 16-7-16-17-7 17-7 7-16Zm348 0 7 16 17 7-17 7-7 16-7-16-17-7 17-7 7-16ZM66 238l5 12 13 5-13 5-5 12-5-12-13-5 13-5 5-12Zm380 0 5 12 13 5-13 5-5 12-5-12-13-5 13-5 5-12Z"/>
+                        <path fill="#f3b23a" stroke="#202a35" stroke-linejoin="round" stroke-width="10" d="m208 55 48-55 48 55 39-31 9 88H160l9-88 39 31Zm48-11 30 35h-60l30-35Z"/>
+                        <circle cx="256" cy="105" r="48" fill="#f4ede3" stroke="#202a35" stroke-width="17"/>
+                        <path fill="#6b9ab4" stroke="#202a35" stroke-linejoin="round" stroke-width="17" d="m120 124 57 57 74 27 74-27 57-57 39 39-68 68-55 25 13 204h-51l-4-151-18 151h-51l13-204-55-25-68-68 39-39Z"/>
+                        <path fill="#c83d42" stroke="#202a35" stroke-linejoin="round" stroke-width="17" d="m208 210-18 99-50 91q-12-20-31-5l-18 17 47-104 45-82 25-16Zm96 0 18 99 50 91q12-20 31-5l18 17-47-104-45-82-25-16Z"/>
+                        <path fill="#c83d42" stroke="#202a35" stroke-linejoin="round" stroke-width="10" d="m232 184 24 60 24-60z"/>
+                        <path fill="#f3b23a" stroke="#202a35" stroke-linejoin="round" stroke-width="17" d="M174 471h164v41H174z"/>
+                    </svg>
+                <div>
+                    <h1 class="text-2xl md:text-3xl font-black font-heading tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-amber-300 via-rose-200 to-teal-300">
+                        Q&Yay!
+                    </h1>
+                </div>
+            </div>
+
+            <!-- Global Sound & Voice Controls -->
+            <div class="flex items-center gap-2 md:gap-3">
+                <button id="speech-replay-btn" onclick="speakCurrentQuestion()" class="px-3 py-2 glass-card rounded-xl flex items-center gap-2 text-xs font-bold text-amber-300 hover:bg-white/20 transition" title="Read Question Aloud">
+                    <i id="speech-anim-icon" class="fas fa-volume-up"></i>
+                    <span class="hidden sm:inline">Read Aloud</span>
+                </button>
+
+                <button id="voice-toggle-btn" onclick="toggleVoice()" class="w-10 h-10 glass-card rounded-xl flex items-center justify-center text-sm transition" title="Auto Voice Reading Toggle">
+                    <i id="voice-icon" class="fas fa-comment-dots text-teal-300"></i>
+                </button>
+
+                <button id="sound-toggle-btn" onclick="toggleSound()" class="w-10 h-10 glass-card rounded-xl flex items-center justify-center text-sm transition" title="Sound Effects Toggle">
+                    <i id="sound-icon" class="fas fa-music text-amber-300"></i>
+                </button>
+            </div>
+        </header>
+
+        <section id="start-screen" class="flex-1 grid grid-cols-1 lg:grid-cols-[minmax(0,1.05fr)_minmax(400px,0.95fr)] items-center gap-12 py-10 my-auto">
+            <div class="flex flex-col items-center gap-6 text-center">
+                
+                    <svg class="w-48 h-48 md:w-64 md:h-64 shrink-0" viewBox="0 0 512 512" role="img" aria-label="Q and Yay crowned figure" xmlns="http://www.w3.org/2000/svg">
+                        <path fill="#202a35" d="M0 0h512v512H0z" opacity="0"/>
+                        <path fill="#f3b23a" d="M82 88l7 16 17 7-17 7-7 16-7-16-17-7 17-7 7-16Zm348 0 7 16 17 7-17 7-7 16-7-16-17-7 17-7 7-16ZM66 238l5 12 13 5-13 5-5 12-5-12-13-5 13-5 5-12Zm380 0 5 12 13 5-13 5-5 12-5-12-13-5 13-5 5-12Z"/>
+                        <path fill="#f3b23a" stroke="#202a35" stroke-linejoin="round" stroke-width="10" d="m208 55 48-55 48 55 39-31 9 88H160l9-88 39 31Zm48-11 30 35h-60l30-35Z"/>
+                        <circle cx="256" cy="105" r="48" fill="#f4ede3" stroke="#202a35" stroke-width="17"/>
+                        <path fill="#6b9ab4" stroke="#202a35" stroke-linejoin="round" stroke-width="17" d="m120 124 57 57 74 27 74-27 57-57 39 39-68 68-55 25 13 204h-51l-4-151-18 151h-51l13-204-55-25-68-68 39-39Z"/>
+                        <path fill="#c83d42" stroke="#202a35" stroke-linejoin="round" stroke-width="17" d="m208 210-18 99-50 91q-12-20-31-5l-18 17 47-104 45-82 25-16Zm96 0 18 99 50 91q12-20 31-5l18 17-47-104-45-82-25-16Z"/>
+                        <path fill="#c83d42" stroke="#202a35" stroke-linejoin="round" stroke-width="10" d="m232 184 24 60 24-60z"/>
+                        <path fill="#f3b23a" stroke="#202a35" stroke-linejoin="round" stroke-width="17" d="M174 471h164v41H174z"/>
+                    </svg>
+                
+
+                <div>
+                    <h2 class="text-5xl md:text-7xl font-black font-heading tracking-tight text-white drop-shadow-md mb-3">
+                        Q&<span class="text-amber-300">Yay!</span>
+                    </h2>
+                    <p class="text-slate-300 text-base md:text-lg font-medium max-w-md leading-relaxed">
+                        Pull the scenario card and drop it right onto its correct classification category!
+                    </p>
+                </div>
+
+                <!-- RULES BADGE -->
+                <div class="glass-card w-full max-w-md rounded-2xl border border-amber-300/30 bg-slate-950/35 px-4 py-4 shadow-xl shadow-amber-950/20">
+                    <div class="flex items-center gap-3 border-b border-white/10 pb-3">
+                        <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-400/15 text-amber-300 ring-1 ring-inset ring-amber-300/30">
+                            <i class="fas fa-bolt text-lg" aria-hidden="true"></i>
+                        </div>
+                        <div class="text-left">
+                            <p class="text-[11px] font-extrabold uppercase tracking-[0.2em] text-amber-300">Win condition</p>
+                            <p class="mt-0.5 text-xs font-medium text-slate-300">Complete the challenge before time runs out</p>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 divide-x divide-white/10 pt-3">
+                        <div class="text-center">
+                            <p class="text-3xl font-black font-heading leading-none text-white">3</p>
+                            <p class="mt-1 text-[10px] font-bold uppercase tracking-widest text-slate-400">Correct matches</p>
+                        </div>
+                        <div class="text-center">
+                            <p class="text-3xl font-black font-heading leading-none text-amber-300">60s</p>
+                            <p class="mt-1 text-[10px] font-bold uppercase tracking-widest text-slate-400">Time limit</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- MAIN PLAY BUTTON -->
+                <button onclick="startGame()" class="btn-play-glow mt-2 px-12 py-5 bg-gradient-to-r from-amber-400 via-amber-500 to-rose-500 rounded-3xl text-3xl font-black font-heading text-slate-950 tracking-wide transition transform hover:scale-105 active:scale-95 flex items-center gap-4 border-2 border-amber-300/70 shadow-2xl">
+                    <span>PLAY</span>
+                    <i class="fas fa-play text-2xl"></i>
+                </button>
+
+                <p class="text-xs text-slate-400 font-semibold tracking-wider uppercase">
+                    🔊 Includes automatic Voice Reading & Synthesized Sound FX
+                </p>
+            </div>
+
+            <aside class="w-full max-w-2xl justify-self-center lg:justify-self-end">
+                <div class="glass-card overflow-hidden rounded-3xl border border-teal-300/25 bg-slate-950/40 shadow-2xl shadow-teal-950/20">
+                    <div class="flex items-center justify-between border-b border-white/10 px-5 py-4">
+                        <div class="flex items-center gap-3 text-left">
+                            <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-teal-400/15 text-teal-300 ring-1 ring-inset ring-teal-300/30">
+                                <i class="fas fa-film" aria-hidden="true"></i>
+                            </div>
+                            <div>
+                                <p class="text-sm font-extrabold text-white">How to play</p>
+                                <p class="text-xs text-slate-400">Watch the quick demo</p>
+                            </div>
+                        </div>
+                        <span class="rounded-full border border-teal-300/25 bg-teal-300/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-teal-200">Demo</span>
+                    </div>
+                    <div class="aspect-video bg-slate-950/80 p-4 sm:p-5">
+                        <div class="relative h-full overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-violet-950/80 via-slate-900 to-teal-950/70 p-3" role="img" aria-label="Animated preview showing a scenario card moving to the Routing target">
+                            <div class="mb-3 flex items-center justify-between text-[9px] font-bold uppercase tracking-widest text-slate-400">
+                                <span>Live preview</span>
+                                <span class="text-amber-300">01 / 03 matches</span>
+                            </div>
+                            <div class="grid h-[calc(100%-24px)] grid-cols-[0.9fr_1.1fr] gap-3">
+                                <div class="relative flex items-center justify-center rounded-xl border border-amber-300/30 bg-amber-400/10 p-2">
+                                    <div class="demo-card-motion w-full rounded-xl border border-amber-300/70 bg-slate-900/95 p-3 text-center shadow-lg shadow-amber-950/40">
+                                        <span class="text-[8px] font-extrabold uppercase tracking-widest text-amber-300">Scenario card</span>
+                                        <p class="mt-2 text-[10px] font-bold leading-tight text-white">The assigned road is blocked.</p>
+                                        <span class="mt-2 inline-block text-[9px] text-slate-400">Drag to match</span>
+                                    </div>
+                                </div>
+                                <div class="flex flex-col justify-center gap-2">
+                                    <div class="rounded-lg border border-white/10 bg-white/5 px-2 py-2 text-[9px] font-bold text-slate-300">POI</div>
+                                    <div class="demo-target-pulse rounded-lg border px-2 py-2 text-[9px] font-bold text-white">Routing <span class="float-right text-amber-300">✓</span></div>
+                                    <div class="rounded-lg border border-white/10 bg-white/5 px-2 py-2 text-[9px] font-bold text-slate-300">IoT</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </aside>
+        </section>
+
+        <section id="game-screen" class="hidden flex-1 flex-col justify-between py-2 gap-4">
+            
+            <!-- HUD TOP BAR -->
+            <div class="glass-card p-4 rounded-2xl flex flex-wrap items-center justify-between gap-4">
+                <div class="flex items-center gap-3">
+                    <span class="text-xs text-slate-300 font-bold uppercase tracking-wider">Score Goal:</span>
+                    <div class="flex items-center gap-1.5 font-extrabold text-amber-300 text-2xl font-heading">
+                        <span id="correct-count">0</span> / 3 Correct
+                    </div>
+                </div>
+
+                <!-- 60s Timer Display -->
+                <div class="flex items-center gap-3 bg-slate-900/80 px-4 py-2 rounded-xl border border-amber-400/40">
+                    <i class="fas fa-stopwatch text-amber-400 text-lg"></i>
+                    <span class="text-xs text-slate-300 font-bold uppercase tracking-wider">Timer:</span>
+                    <span id="timer-display" class="text-2xl font-black font-heading text-teal-300">60s</span>
+                </div>
+            </div>
+
+            <!-- INSTRUCTION & VOICE STATUS BAR -->
+            <div class="flex justify-between items-center px-2">
+                <span class="text-xs font-semibold text-slate-300 flex items-center gap-2">
+                    <span>💡 Pull the question card and drop it onto the correct category:</span>
+                </span>
+                <button onclick="speakCurrentQuestion()" class="text-xs font-bold text-teal-300 hover:text-white transition flex items-center gap-1.5 bg-teal-500/10 px-3 py-1 rounded-full border border-teal-500/30">
+                    <i class="fas fa-volume-up"></i> Listen Question
+                </button>
+            </div>
+
+            <!-- GAME PLAY AREA -->
+            <div class="flex-1 grid grid-cols-1 md:grid-cols-12 gap-6 items-center my-2">
+                
+                <div class="md:col-span-5 flex flex-col items-center justify-center">
+                    <div id="question-slot" class="question-slot-box w-full">
+                        <!-- Placeholder rendered when card is pulled out -->
+                        <div id="slot-empty-placeholder" class="question-empty-slot hidden">
+                            <i class="fas fa-arrows-alt text-2xl mb-2 text-amber-400/80 animate-pulse"></i>
+                            <span class="text-xs font-extrabold tracking-wider uppercase text-amber-300">Card in transit...</span>
+                            <span class="text-[11px] text-slate-400 mt-1">Drop onto an answer box</span>
+                        </div>
+
+                        <!-- The draggable question card -->
+                        <div id="draggable-question" class="draggable-card glass-card w-full p-6 md:p-8 rounded-3xl border-2 border-amber-400/70 shadow-2xl text-center relative overflow-hidden group">
+                            <div class="absolute -top-10 -right-10 w-24 h-24 bg-amber-400/15 rounded-full blur-xl"></div>
+                            
+                            <div class="flex items-center justify-center gap-2 mb-3">
+                                <span class="text-[11px] font-extrabold uppercase tracking-widest text-amber-300 bg-amber-400/20 px-3 py-1 rounded-full border border-amber-400/30">
+                                    SCENARIO QUESTION
+                                </span>
+                            </div>
+
+                            <h3 id="question-text" class="text-lg md:text-xl font-bold font-heading text-white leading-relaxed tracking-tight my-2">
+                                Loading Scenario...
+                            </h3>
+
+                            <div class="mt-4 text-xs text-slate-300 flex items-center justify-center gap-2 font-medium bg-white/5 py-2 px-4 rounded-xl border border-white/10">
+                                <i class="fas fa-hand-pointer text-amber-400 animate-bounce"></i> 
+                                <span>Pull card OR tap category target</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- CATEGORY TARGET DROP ZONES -->
+                <div class="md:col-span-7 flex flex-col gap-3 justify-center" id="categories-container">
+                    <!-- Category drop buckets rendered here -->
+                </div>
+            </div>
+
+            <!-- Footer Navigation -->
+            <div class="flex justify-between items-center px-2">
+                <button onclick="openQuitModal()" class="text-xs font-bold text-slate-400 hover:text-white transition flex items-center gap-1.5">
+                    <i class="fas fa-times-circle"></i> Quit Match
+                </button>
+                <div class="text-xs font-semibold text-slate-400 bg-slate-900/60 px-3 py-1 rounded-full border border-slate-700">
+                    Q&Yay! 60s Speed Challenge
+                </div>
+            </div>
+        </section>
+
+        <section id="results-screen" class="hidden flex-1 flex-col items-center justify-center py-6">
+            <div class="glass-modal p-8 rounded-3xl max-w-lg w-full text-center border-2 border-amber-400/50 shadow-2xl relative overflow-hidden">
+                <div id="results-icon" class="text-6xl mb-3">🎉</div>
+
+                <h2 id="results-title" class="text-4xl md:text-5xl font-black font-heading text-amber-300 mb-2">YOU WIN!</h2>
+                <p id="results-subtitle" class="text-slate-300 text-sm md:text-base font-medium mb-6">You successfully matched 3 scenarios in time!</p>
+
+                <div class="grid grid-cols-2 gap-4 mb-6">
+                    <div class="glass-card p-4 rounded-2xl border border-white/10">
+                        <div class="text-[11px] text-slate-300 font-bold uppercase tracking-wider">Matches</div>
+                        <div id="summary-correct" class="text-3xl font-black font-heading text-amber-300">3 / 3</div>
+                    </div>
+                    <div class="glass-card p-4 rounded-2xl border border-white/10">
+                        <div class="text-[11px] text-slate-300 font-bold uppercase tracking-wider">Time Left</div>
+                        <div id="summary-time" class="text-3xl font-black font-heading text-teal-300">0s</div>
+                    </div>
+                </div>
+
+                <div class="flex gap-3 justify-center">
+                    <button onclick="startGame()" class="flex-1 py-4 bg-gradient-to-r from-amber-400 via-amber-500 to-rose-500 rounded-2xl font-extrabold text-slate-950 hover:brightness-110 transition shadow-lg text-lg font-heading active:scale-95">
+                        <i class="fas fa-redo mr-2"></i> PLAY AGAIN
+                    </button>
+                    <button onclick="showScreen('start')" class="px-6 py-4 glass-card rounded-2xl font-bold hover:bg-white/20 transition font-heading active:scale-95">
+                        HOME
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <div id="quit-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-4">
+            <div class="glass-modal p-6 rounded-2xl max-w-sm w-full text-center border border-white/20 shadow-2xl">
+                <div class="text-3xl mb-2">⚠️</div>
+                <h3 class="text-xl font-bold font-heading text-white mb-2">Quit Current Match?</h3>
+                <p class="text-xs text-slate-300 mb-6">Your current match progress will be lost.</p>
+                <div class="flex gap-3">
+                    <button onclick="confirmQuitAction()" class="flex-1 py-2.5 bg-rose-600 hover:bg-rose-500 rounded-xl font-bold text-white text-sm transition">
+                        Yes, Quit
+                    </button>
+                    <button onclick="closeQuitModal()" class="flex-1 py-2.5 glass-card hover:bg-white/20 rounded-xl font-bold text-slate-200 text-sm transition">
+                        Cancel
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div id="answer-reveal-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-slate-950/85 backdrop-blur-md p-4">
+            <div class="glass-modal w-full max-w-md rounded-3xl border-2 border-rose-400/50 p-7 text-center shadow-2xl shadow-rose-950/40">
+                <div class="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-rose-500/15 text-3xl text-rose-300 ring-1 ring-inset ring-rose-300/30">
+                    <i class="fas fa-circle-exclamation" aria-hidden="true"></i>
+                </div>
+                <p class="text-xs font-extrabold uppercase tracking-[0.2em] text-rose-300">Not quite</p>
+                <h3 class="mt-2 text-2xl font-black font-heading text-white">Here is the correct answer</h3>
+                <div class="mt-5 rounded-2xl border border-emerald-300/30 bg-emerald-400/10 px-5 py-4">
+                    <p id="answer-reveal-category" class="text-xl font-black font-heading text-emerald-300"></p>
+                </div>
+                <p id="answer-reveal-question" class="mt-4 text-sm leading-relaxed text-slate-300"></p>
+                <p class="mt-5 text-[10px] font-bold uppercase tracking-widest text-slate-500">Next question in 5 seconds</p>
+            </div>
+        </div>
+
+    </div>
+
+    <script src="qa_api.js"></script>
+    <script>
+
+        class SoundFX {
+            constructor() {
+                this.ctx = null;
+                this.muted = false;
+            }
+
+            init() {
+                if (!this.ctx) {
+                    const AudioContext = window.AudioContext || window.webkitAudioContext;
+                    if (AudioContext) this.ctx = new AudioContext();
+                }
+                if (this.ctx && this.ctx.state === 'suspended') {
+                    this.ctx.resume();
+                }
+            }
+
+            playCorrectYay() {
+                if (this.muted || !this.ctx) return;
+                const now = this.ctx.currentTime;
+                const notes = [523.25, 659.25, 783.99, 1046.50];
+                notes.forEach((freq, i) => {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(freq, now + i * 0.06);
+                    gain.gain.setValueAtTime(0, now + i * 0.06);
+                    gain.gain.linearRampToValueAtTime(0.25, now + i * 0.06 + 0.02);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.06 + 0.25);
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    osc.start(now + i * 0.06);
+                    osc.stop(now + i * 0.06 + 0.25);
+                });
+            }
+
+            playFailedWrong() {
+                if (this.muted || !this.ctx) return;
+                const now = this.ctx.currentTime;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(220, now);
+                osc.frequency.exponentialRampToValueAtTime(90, now + 0.35);
+                gain.gain.setValueAtTime(0.3, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.35);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start(now);
+                osc.stop(now + 0.35);
+            }
+
+            playVictoryFanfare() {
+                if (this.muted || !this.ctx) return;
+                const now = this.ctx.currentTime;
+                const fanfare = [
+                    { note: 523.25, dur: 0.12 },
+                    { note: 659.25, dur: 0.12 },
+                    { note: 783.99, dur: 0.12 },
+                    { note: 1046.50, dur: 0.4 }
+                ];
+                let offset = 0;
+                fanfare.forEach((step) => {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = 'sine';
+                    osc.frequency.value = step.note;
+                    gain.gain.setValueAtTime(0.25, now + offset);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + offset + step.dur);
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    osc.start(now + offset);
+                    osc.stop(now + offset + step.dur);
+                    offset += step.dur * 0.85;
+                });
+            }
+        }
+
+        const sound = new SoundFX();
+
+        function toggleSound() {
+            sound.muted = !sound.muted;
+            const icon = document.getElementById('sound-icon');
+            if (sound.muted) {
+                icon.className = 'fas fa-volume-mute text-slate-500';
+            } else {
+                icon.className = 'fas fa-music text-amber-300';
+                sound.init();
+            }
+        }
+
+        let speechEnabled = true;
+
+        function toggleVoice() {
+            speechEnabled = !speechEnabled;
+            const icon = document.getElementById('voice-icon');
+            if (!speechEnabled) {
+                icon.className = 'fas fa-comment-slash text-slate-500';
+                if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+            } else {
+                icon.className = 'fas fa-comment-dots text-teal-300';
+                speakCurrentQuestion();
+            }
+        }
+
+        function speakCurrentQuestion() {
+            if (!speechEnabled || !('speechSynthesis' in window)) return;
+            const questionText = document.getElementById('question-text')?.innerText;
+            if (!questionText || questionText === 'Loading Scenario...') return;
+
+            window.speechSynthesis.cancel();
+            const utterance = new SpeechSynthesisUtterance(questionText);
+            utterance.rate = 0.95;
+            utterance.pitch = 1.0;
+            utterance.lang = 'en-US';
+
+            const animIcon = document.getElementById('speech-anim-icon');
+            if (animIcon) animIcon.classList.add('animate-pulse');
+            utterance.onend = () => {
+                if (animIcon) animIcon.classList.remove('animate-pulse');
+            };
+            window.speechSynthesis.speak(utterance);
+        }
+
+        let gameState = {
+            questions: [],
+            categories: [],
+            currentIndex: 0,
+            correctCount: 0,
+            targetWinCount: 3,
+            timeLeft: 60,
+            timerInterval: null
+        };
+
+        function showScreen(screenId) {
+            if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+            ['start', 'game', 'results'].forEach(s => {
+                const el = document.getElementById(`${s}-screen`);
+                if (el) el.classList.add('hidden');
+            });
+            const target = document.getElementById(`${screenId}-screen`);
+            if (target) {
+                target.classList.remove('hidden');
+                target.classList.add('flex');
+            }
+        }
+
+        function openQuitModal() {
+            document.getElementById('quit-modal').classList.remove('hidden');
+        }
+
+        function closeQuitModal() {
+            document.getElementById('quit-modal').classList.add('hidden');
+        }
+
+        function confirmQuitAction() {
+            closeQuitModal();
+            clearInterval(gameState.timerInterval);
+            showScreen('start');
+        }
+
+        async function startGame() {
+            sound.init();
+
+            const fetchedQuestions = await QAApi.getQuestions();
+            const categories = QAApi.getCategories();
+
+            gameState = {
+                questions: fetchedQuestions,
+                categories: categories,
+                currentIndex: 0,
+                correctCount: 0,
+                targetWinCount: 3,
+                timeLeft: 60,
+                timerInterval: null
+            };
+
+            showScreen('game');
+            start60sTimer();
+            loadNextScenario();
+        }
+
+        function start60sTimer(resetTime = true) {
+            clearInterval(gameState.timerInterval);
+            if (resetTime) gameState.timeLeft = 60;
+            updateTimerDisplay();
+
+            gameState.timerInterval = setInterval(() => {
+                gameState.timeLeft--;
+                updateTimerDisplay();
+
+                if (gameState.timeLeft <= 0) {
+                    clearInterval(gameState.timerInterval);
+                    endGame(false);
+                }
+            }, 1000);
+        }
+
+        function updateTimerDisplay() {
+            const timerEl = document.getElementById('timer-display');
+            if (timerEl) {
+                timerEl.innerText = `${gameState.timeLeft}s`;
+                if (gameState.timeLeft <= 10) {
+                    timerEl.classList.remove('text-teal-300');
+                    timerEl.classList.add('text-rose-400', 'animate-pulse');
+                } else {
+                    timerEl.classList.remove('text-rose-400', 'animate-pulse');
+                    timerEl.classList.add('text-teal-300');
+                }
+            }
+        }
+
+        function loadNextScenario() {
+            if (gameState.correctCount >= gameState.targetWinCount) {
+                endGame(true);
+                return;
+            }
+
+            if (gameState.currentIndex >= gameState.questions.length) {
+                gameState.currentIndex = 0;
+            }
+
+            const currentScenario = gameState.questions[gameState.currentIndex];
+            document.getElementById('correct-count').innerText = gameState.correctCount;
+            document.getElementById('question-text').innerText = currentScenario.question;
+
+            // Reset card position and placeholder
+            const card = document.getElementById('draggable-question');
+            const placeholder = document.getElementById('slot-empty-placeholder');
+            if (card) {
+                card.classList.remove('is-pulled', 'hidden');
+                card.style.left = '';
+                card.style.top = '';
+                card.style.width = '';
+            }
+            if (placeholder) {
+                placeholder.classList.add('hidden');
+            }
+
+            renderCategoryBuckets(gameState.categories);
+            setupPullMechanic();
+
+            setTimeout(() => {
+                speakCurrentQuestion();
+            }, 250);
+        }
+
+        function renderCategoryBuckets(categories) {
+            const container = document.getElementById('categories-container');
+            container.innerHTML = '';
+
+            categories.forEach((cat, idx) => {
+                const bucket = document.createElement('div');
+                bucket.dataset.category = cat;
+                bucket.className = 'answer-bucket glass-card p-4 rounded-2xl border-2 border-white/15 flex items-center justify-between transition cursor-pointer hover:border-amber-400/60 hover:bg-white/15';
+
+                bucket.innerHTML = `
+                    <div class="flex items-center gap-3">
+                        <span class="w-8 h-8 rounded-xl bg-violet-950/80 text-amber-300 font-extrabold flex items-center justify-center text-xs border border-violet-400/30 font-heading shrink-0">
+                            ${idx + 1}
+                        </span>
+                        <span class="font-bold text-white text-sm md:text-base font-heading tracking-tight">${cat}</span>
+                    </div>
+                    <span class="text-[10px] text-slate-300 uppercase font-bold bg-white/10 px-2.5 py-1 rounded-lg tracking-wider shrink-0">
+                        Target Zone
+                    </span>
+                `;
+
+                // Tap-to-match fallback
+                bucket.onclick = () => handleCategoryMatch(cat, bucket);
+
+                container.appendChild(bucket);
+            });
+        }
+
+        function setupPullMechanic() {
+            const card = document.getElementById('draggable-question');
+            const placeholder = document.getElementById('slot-empty-placeholder');
+            if (!card) return;
+
+            let isPulling = false;
+            let initialWidth = 0;
+
+            function onPointerDown(e) {
+                // Only primary button
+                if (e.button !== undefined && e.button !== 0) return;
+                isPulling = true;
+                initialWidth = card.offsetWidth;
+
+                // When pulled out, reveal dashed placeholder in its former slot
+                placeholder.classList.remove('hidden');
+
+                // Card becomes floating element following cursor/pointer
+                card.classList.add('is-pulled');
+                card.style.width = `${initialWidth}px`;
+                updateCardPosition(e.clientX, e.clientY);
+
+                window.addEventListener('pointermove', onPointerMove);
+                window.addEventListener('pointerup', onPointerUp);
+                window.addEventListener('pointercancel', onPointerUp);
+            }
+
+            function onPointerMove(e) {
+                if (!isPulling) return;
+                updateCardPosition(e.clientX, e.clientY);
+
+                // Detect hover over category drop zones
+                const buckets = document.querySelectorAll('.answer-bucket');
+                buckets.forEach(bucket => {
+                    const rect = bucket.getBoundingClientRect();
+                    if (e.clientX >= rect.left && e.clientX <= rect.right &&
+                        e.clientY >= rect.top && e.clientY <= rect.bottom) {
+                        bucket.classList.add('drop-target-hover');
+                    } else {
+                        bucket.classList.remove('drop-target-hover');
+                    }
+                });
+            }
+
+            function onPointerUp(e) {
+                if (!isPulling) return;
+                isPulling = false;
+
+                window.removeEventListener('pointermove', onPointerMove);
+                window.removeEventListener('pointerup', onPointerUp);
+                window.removeEventListener('pointercancel', onPointerUp);
+
+                // Check which target was dropped on
+                let matchedBucket = null;
+                const buckets = document.querySelectorAll('.answer-bucket');
+                buckets.forEach(bucket => {
+                    const rect = bucket.getBoundingClientRect();
+                    if (e.clientX >= rect.left && e.clientX <= rect.right &&
+                        e.clientY >= rect.top && e.clientY <= rect.bottom) {
+                        matchedBucket = bucket;
+                    }
+                    bucket.classList.remove('drop-target-hover');
+                });
+
+                if (matchedBucket) {
+                    const selectedCategory = matchedBucket.dataset.category;
+                    handleCategoryMatch(selectedCategory, matchedBucket);
+                } else {
+                    // Snapped back into slot if dropped in empty space
+                    card.classList.remove('is-pulled');
+                    card.style.left = '';
+                    card.style.top = '';
+                    card.style.width = '';
+                    placeholder.classList.add('hidden');
+                }
+            }
+
+            function updateCardPosition(clientX, clientY) {
+                card.style.left = `${clientX}px`;
+                card.style.top = `${clientY}px`;
+            }
+
+            // Remove any existing listeners and attach fresh pointer handlers
+            card.onpointerdown = onPointerDown;
+        }
+
+        function handleCategoryMatch(selectedCategory, bucketElement) {
+            const currentScenario = gameState.questions[gameState.currentIndex];
+            const isCorrect = (selectedCategory === currentScenario.category);
+
+            if (isCorrect) {
+                sound.playCorrectYay();
+                gameState.correctCount++;
+
+                if (bucketElement) {
+                    bucketElement.classList.add('animate-correct', 'bg-emerald-500/30', 'border-emerald-400');
+                }
+
+                if (gameState.correctCount >= gameState.targetWinCount) {
+                    clearInterval(gameState.timerInterval);
+                    setTimeout(() => endGame(true), 400);
+                    return;
+                }
+            } else {
+                sound.playFailedWrong();
+
+                if (bucketElement) {
+                    bucketElement.classList.add('animate-shake', 'bg-rose-500/30', 'border-rose-400');
+                }
+
+                // Briefly reveal the correct category border
+                document.querySelectorAll('.answer-bucket').forEach(b => {
+                    if (b.dataset.category === currentScenario.category) {
+                        b.classList.add('border-emerald-400', 'bg-emerald-500/20');
+                    }
+                });
+
+                clearInterval(gameState.timerInterval);
+                document.getElementById('draggable-question').classList.add('hidden');
+                document.getElementById('answer-reveal-category').innerText = currentScenario.category;
+                document.getElementById('answer-reveal-question').innerText = currentScenario.question;
+                document.getElementById('answer-reveal-modal').classList.remove('hidden');
+
+                setTimeout(() => {
+                    document.getElementById('answer-reveal-modal').classList.add('hidden');
+                    gameState.currentIndex++;
+                    loadNextScenario();
+                    start60sTimer(false);
+                }, 5000);
+                return;
+            }
+
+            setTimeout(() => {
+                gameState.currentIndex++;
+                loadNextScenario();
+            }, 750);
+        }
+
+        function endGame(didWin) {
+            clearInterval(gameState.timerInterval);
+            if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+
+            showScreen('results');
+
+            const titleEl = document.getElementById('results-title');
+            const subTitleEl = document.getElementById('results-subtitle');
+            const iconEl = document.getElementById('results-icon');
+
+            document.getElementById('summary-correct').innerText = `${gameState.correctCount} / 3`;
+            document.getElementById('summary-time').innerText = `${gameState.timeLeft}s`;
+
+            if (didWin) {
+                sound.playVictoryFanfare();
+                iconEl.innerText = '🎉';
+                titleEl.innerText = 'YOU WIN!';
+                titleEl.className = 'text-4xl md:text-5xl font-black font-heading text-amber-300 mb-2';
+                subTitleEl.innerText = 'Awesome job! You correctly matched 3 scenarios in time!';
+
+                confetti({
+                    particleCount: 120,
+                    spread: 85,
+                    origin: { y: 0.6 }
+                });
+            } else {
+                sound.playFailedWrong();
+                iconEl.innerText = '⏰';
+                titleEl.innerText = 'TIME UP!';
+                titleEl.className = 'text-4xl md:text-5xl font-black font-heading text-rose-400 mb-2';
+                subTitleEl.innerText = 'Time ran out! You need 3 correct matches within 60 seconds to win.';
+            }
+        }
+    </script>
+</body>
+</html>
